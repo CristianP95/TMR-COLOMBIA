@@ -9,12 +9,6 @@ st.set_page_config(
     page_title="Analizador TMR Colombia", page_icon="📈", layout="wide"
 )
 
-st.title("🇨🇴 Histórico y Análisis de la Tasa Representativa del Mercado (TMR)")
-st.markdown(
-    "Datos oficiales obtenidos en tiempo real desde el portal de datos abiertos"
-    " de Colombia (`datos.gov.co`)."
-)
-
 # Función para consumir la API con caché y codificación de URL segura
 @st.cache_data(ttl=3600)
 def cargar_datos_tmr():
@@ -46,34 +40,46 @@ else:
     # Definir límites globales basados en los datos
     fecha_min_global = datos[0]["fecha"].date()
     fecha_max_global = datos[-1]["fecha"].date()
+    tmr_hoy = datos[-1]["valor"] # Último valor real del dataset global (Hoy)
+
+    # Cabecera principal con TMR de Hoy destacada al lado del título
+    col_title, col_badge = st.columns([3, 1])
+    with col_title:
+        st.title("🇨🇴 Histórico y Análisis de la TMR")
+    with col_badge:
+        st.metric(label="💵 TMR de Hoy", value=f"${tmr_hoy:,.2f} COP")
+
+    st.markdown(
+        "Datos oficiales obtenidos en tiempo real desde el portal de datos abiertos de Colombia (`datos.gov.co`)."
+    )
 
     # Inicializar Session State para el botón de restablecer filtros
-    if "rango_fechas" not in st.session_state:
-        st.session_state.rango_fechas = (fecha_min_global, fecha_max_global)
+    if "rango_anios" not in st.session_state:
+        st.session_state.rango_anios = (fecha_min_global.year, fecha_max_global.year)
     if "segmentacion" not in st.session_state:
         st.session_state.segmentacion = "Mensual"
     if "limite_alerta" not in st.session_state:
         st.session_state.limite_alerta = 4500.0
 
     def reset_filtros():
-        st.session_state.rango_fechas = (fecha_min_global, fecha_max_global)
+        st.session_state.rango_anios = (fecha_min_global.year, fecha_max_global.year)
         st.session_state.segmentacion = "Mensual"
         st.session_state.limite_alerta = 4500.0
 
-    # Sidebar: Panel de Control, Segmentación y Filtros de Fecha
+    # Sidebar: Panel de Control, Segmentación y Filtros con Slider
     st.sidebar.header("⚙️ Panel de Control y Filtros")
 
     # Botón de Restablecer Filtros
     st.sidebar.button("🔄 Restablecer Filtros", on_click=reset_filtros)
 
-    # 1. Filtro de Rango de Fechas
-    st.sidebar.subheader("📅 Rango de Fechas en el Eje X")
-    rango_fechas = st.sidebar.date_input(
-        "Selecciona el intervalo:",
-        value=st.session_state.rango_fechas,
-        min_value=fecha_min_global,
-        max_value=fecha_max_global,
-        key="rango_fechas"
+    # 1. Filtro de Rango de Años con Barra de Desplazamiento (Slider)
+    st.sidebar.subheader("📅 Rango de Años en el Eje X")
+    rango_anios = st.sidebar.slider(
+        "Selecciona el intervalo de años:",
+        min_value=fecha_min_global.year,
+        max_value=fecha_max_global.year,
+        value=st.session_state.rango_anios,
+        key="rango_anios"
     )
 
     # 2. Selector de segmentación
@@ -96,18 +102,15 @@ else:
         key="limite_alerta"
     )
 
-    # Filtrar datos según el rango de fechas seleccionado
-    if len(rango_fechas) == 2:
-        f_inicio, f_fin = rango_fechas
-        datos_en_rango = [
-            d for d in datos 
-            if f_inicio <= d["fecha"].date() <= f_fin
-        ]
-    else:
-        datos_en_rango = datos
+    # Filtrar datos según el rango de años seleccionado en el slider
+    anio_inicio, anio_fin = rango_anios
+    datos_en_rango = [
+        d for d in datos 
+        if anio_inicio <= d["fecha"].year <= anio_fin
+    ]
 
     if not datos_en_rango:
-        st.warning("No hay registros en el rango de fechas seleccionado.")
+        st.warning("No hay registros en el rango de años seleccionado.")
     else:
         # Procesamiento y agrupación de datos filtrados
         datos_filtrados = {}
@@ -129,7 +132,6 @@ else:
 
         ultimo_valor = valores_graf[-1]
         ultima_fecha = fechas_graf[-1]
-        tmr_hoy = datos[-1]["valor"] # Último valor real del dataset global (Hoy)
 
         # Estadísticas del periodo seleccionado
         promedio_periodo = sum(valores_graf) / len(valores_graf)
@@ -152,26 +154,22 @@ else:
         cambio_absoluto = ultimo_valor - primer_valor
         cambio_porcentual = (cambio_absoluto / primer_valor) * 100 if primer_valor > 0 else 0.0
 
-        # Métricas Superiores Organizadas en dos filas
-        col1, col2, col3, col4, col5 = st.columns(5)
+        # Métricas Superiores Organizadas (4 columnas principales del rango)
+        col1, col2, col3, col4 = st.columns(4)
         col1.metric(
             label="TMR Final del Rango",
             value=f"${ultimo_valor:,.2f}",
             delta=f"{cambio_porcentual:.2f}%",
         )
         col2.metric(
-            label="TMR de Hoy",
-            value=f"${tmr_hoy:,.2f}",
-        )
-        col3.metric(
             label="Promedio Periodo",
             value=f"${promedio_periodo:,.2f}",
         )
-        col4.metric(
+        col3.metric(
             label="Máximo Periodo",
             value=f"${max_periodo:,.2f}",
         )
-        col5.metric(
+        col4.metric(
             label="Mínimo Periodo",
             value=f"${min_periodo:,.2f}",
         )
