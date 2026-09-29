@@ -47,24 +47,42 @@ else:
     fecha_min_global = datos[0]["fecha"].date()
     fecha_max_global = datos[-1]["fecha"].date()
 
+    # Inicializar Session State para el botón de restablecer filtros
+    if "rango_fechas" not in st.session_state:
+        st.session_state.rango_fechas = (fecha_min_global, fecha_max_global)
+    if "segmentacion" not in st.session_state:
+        st.session_state.segmentacion = "Mensual"
+    if "limite_alerta" not in st.session_state:
+        st.session_state.limite_alerta = 4500.0
+
+    def reset_filtros():
+        st.session_state.rango_fechas = (fecha_min_global, fecha_max_global)
+        st.session_state.segmentacion = "Mensual"
+        st.session_state.limite_alerta = 4500.0
+
     # Sidebar: Panel de Control, Segmentación y Filtros de Fecha
     st.sidebar.header("⚙️ Panel de Control y Filtros")
 
-    # 1. Filtro de Rango de Fechas (Nuevo)
+    # Botón de Restablecer Filtros
+    st.sidebar.button("🔄 Restablecer Filtros", on_click=reset_filtros)
+
+    # 1. Filtro de Rango de Fechas
     st.sidebar.subheader("📅 Rango de Fechas en el Eje X")
     rango_fechas = st.sidebar.date_input(
         "Selecciona el intervalo:",
-        value=(fecha_min_global, fecha_max_global),
+        value=st.session_state.rango_fechas,
         min_value=fecha_min_global,
-        max_value=fecha_max_global
+        max_value=fecha_max_global,
+        key="rango_fechas"
     )
 
-    # 2. Selector de segmentación (Ya establecido)
+    # 2. Selector de segmentación
     st.sidebar.subheader("📊 Agrupación")
     segmentacion = st.sidebar.selectbox(
         "Agrupar información por:",
         ["Diario", "Semanal", "Mensual", "Anual"],
-        index=2,
+        index=["Diario", "Semanal", "Mensual", "Anual"].index(st.session_state.segmentacion),
+        key="segmentacion"
     )
 
     # 3. Configuración de Alertas
@@ -74,11 +92,11 @@ else:
         "Notificar si la TMR supera (COP):",
         min_value=1000.0,
         max_value=10000.0,
-        value=4500.0,
         step=50.0,
+        key="limite_alerta"
     )
 
-    # Filtrar datos según el rango de fechas seleccionado en la barra lateral
+    # Filtrar datos según el rango de fechas seleccionado
     if len(rango_fechas) == 2:
         f_inicio, f_fin = rango_fechas
         datos_en_rango = [
@@ -111,6 +129,12 @@ else:
 
         ultimo_valor = valores_graf[-1]
         ultima_fecha = fechas_graf[-1]
+        tmr_hoy = datos[-1]["valor"] # Último valor real del dataset global (Hoy)
+
+        # Estadísticas del periodo seleccionado
+        promedio_periodo = sum(valores_graf) / len(valores_graf)
+        max_periodo = max(valores_graf)
+        min_periodo = min(valores_graf)
 
         # Sistema de Alertas
         if activar_alerta and ultimo_valor > limite_alerta:
@@ -128,18 +152,29 @@ else:
         cambio_absoluto = ultimo_valor - primer_valor
         cambio_porcentual = (cambio_absoluto / primer_valor) * 100 if primer_valor > 0 else 0.0
 
-        col1, col2, col3 = st.columns(3)
+        # Métricas Superiores Organizadas en dos filas
+        col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric(
-            label="TMR al Final del Rango",
-            value=f"${ultimo_valor:,.2f} COP",
-            delta=f"{cambio_porcentual:.2f}% en el periodo",
+            label="TMR Final del Rango",
+            value=f"${ultimo_valor:,.2f}",
+            delta=f"{cambio_porcentual:.2f}%",
         )
         col2.metric(
-            label="Variación Absoluta",
-            value=f"${abs(cambio_absoluto):,.2f} COP",
-            delta_color="inverse",
+            label="TMR de Hoy",
+            value=f"${tmr_hoy:,.2f}",
         )
-        col3.metric(label="Total Puntos en Gráfica", value=len(valores_graf))
+        col3.metric(
+            label="Promedio Periodo",
+            value=f"${promedio_periodo:,.2f}",
+        )
+        col4.metric(
+            label="Máximo Periodo",
+            value=f"${max_periodo:,.2f}",
+        )
+        col5.metric(
+            label="Mínimo Periodo",
+            value=f"${min_periodo:,.2f}",
+        )
 
         st.subheader(f"📈 Tendencia Histórica ({segmentacion})")
 
