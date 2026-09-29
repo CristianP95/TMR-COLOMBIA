@@ -62,7 +62,7 @@ else:
     meses_disponibles = sorted(list(set(d["fecha"].strftime("%Y-%m") for d in datos)))
     semanas_disponibles = sorted(list(set(d["fecha"].strftime("%Y-W%V") for d in datos)))
 
-    # Inicialización de Session State
+    # Inicialización de Session State con rangos completos seguros
     if "segmentacion" not in st.session_state:
         st.session_state.segmentacion = "Mensual"
     if "rango_anual" not in st.session_state:
@@ -123,6 +123,7 @@ else:
         rango_seleccionado = st.sidebar.select_slider(
             "Selecciona el intervalo de años:",
             options=anos_disponibles,
+            value=st.session_state.rango_anual,
             key="rango_anual"
         )
         if isinstance(rango_seleccionado, (list, tuple)) and len(rango_seleccionado) == 2:
@@ -135,6 +136,7 @@ else:
         rango_seleccionado = st.sidebar.select_slider(
             "Selecciona el intervalo de meses:",
             options=meses_disponibles,
+            value=st.session_state.rango_mensual,
             key="rango_mensual"
         )
         if isinstance(rango_seleccionado, (list, tuple)) and len(rango_seleccionado) == 2:
@@ -147,6 +149,7 @@ else:
         rango_seleccionado = st.sidebar.select_slider(
             "Selecciona el intervalo de semanas:",
             options=semanas_disponibles,
+            value=st.session_state.rango_semanal,
             key="rango_semanal"
         )
         if isinstance(rango_seleccionado, (list, tuple)) and len(rango_seleccionado) == 2:
@@ -170,6 +173,7 @@ else:
         else:
             rango_fechas = st.sidebar.date_input(
                 "Selecciona el intervalo de días:",
+                value=st.session_state.rango_diario,
                 min_value=fecha_min_global,
                 max_value=fecha_max_global,
                 key="rango_diario"
@@ -205,6 +209,8 @@ else:
             else:
                 key = f.strftime("%Y")
 
+            # Si hay múltiples datos en el mismo período (ej. varios días en un mes), 
+            # guardamos el último valor de ese período para la gráfica.
             datos_filtrados[key] = d["valor"]
 
         fechas_graf = list(datos_filtrados.keys())
