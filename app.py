@@ -9,6 +9,21 @@ st.set_page_config(
     page_title="Analizador TMR Colombia", page_icon="📈", layout="wide"
 )
 
+# Diccionarios en español para formatear la fecha de hoy
+DIAS_ES = {
+    "Monday": "Lunes", "Tuesday": "Martes", "Wednesday": "Miércoles",
+    "Thursday": "Jueves", "Friday": "Viernes", "Saturday": "Sábado", "Sunday": "Domingo"
+}
+MESES_ES = {
+    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+    7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+}
+
+def obtener_fecha_formateada(dt):
+    dia_semana = DIAS_ES.get(dt.strftime("%A"), "")
+    mes = MESES_ES.get(dt.month, "")
+    return f"{dia_semana} {dt.day} de {mes} de {dt.year}"
+
 # Función para consumir la API con caché y codificación de URL segura
 @st.cache_data(ttl=3600)
 def cargar_datos_tmr():
@@ -37,38 +52,41 @@ datos = cargar_datos_tmr()
 if not datos:
     st.warning("No se pudieron cargar los datos en este momento. Intenta recargar la página.")
 else:
-    # Definir límites globales
     fecha_min_global = datos[0]["fecha"].date()
     fecha_max_global = datos[-1]["fecha"].date()
-    tmr_hoy = datos[-1]["valor"]  # Último valor real del dataset global (Hoy)
+    tmr_hoy = datos[-1]["valor"]  
+    fecha_hoy_obj = datos[-1]["fecha"]
+    fecha_hoy_str = obtener_fecha_formateada(fecha_hoy_obj)
 
-    # Cabecera principal con TMR de Hoy destacada al lado del título
+    # Cabecera principal con TMR de Hoy y su fecha detallada
     col_title, col_badge = st.columns([3, 1])
     with col_title:
         st.title("🇨🇴 Histórico y Análisis de la TMR")
     with col_badge:
-        st.metric(label="💵 TMR de Hoy", value=f"${tmr_hoy:,.2f} COP")
+        st.metric(
+            label="💵 TMR de Hoy", 
+            value=f"${tmr_hoy:,.2f} COP", 
+            delta=fecha_hoy_str,
+            delta_color="off"
+        )
 
     st.markdown(
         "Datos oficiales obtenidos en tiempo real desde el portal de datos abiertos de Colombia (`datos.gov.co`)."
     )
 
-    # Sidebar: Panel de Control con nueva jerarquía
+    # Sidebar: Panel de Control con jerarquía de filtros
     st.sidebar.header("⚙️ Panel de Control y Filtros")
 
-    # Botón de Restablecer Filtros
     if st.sidebar.button("🔄 Restablecer Filtros"):
         st.rerun()
 
-    # 1. Jerarquía Principal: Agrupación (Define la escala del eje X)
     st.sidebar.subheader("📊 Agrupación Temporal")
     segmentacion = st.sidebar.selectbox(
         "Agrupar información por:",
         ["Anual", "Mensual", "Semanal", "Diario"],
-        index=1  # Por defecto Mensual
+        index=1 
     )
 
-    # 2. Filtro de Intervalo Dinámico según la Agrupación elegida
     st.sidebar.subheader("📅 Rango del Eje X")
     
     if segmentacion == "Anual":
@@ -114,7 +132,6 @@ else:
         else:
             datos_en_rango = datos
 
-    # 3. Configuración de Alertas
     st.sidebar.subheader("🚨 Configuración de Alertas")
     activar_alerta = st.sidebar.checkbox("Activar alerta por umbral de TMR", value=True)
     limite_alerta = st.sidebar.number_input(
@@ -128,7 +145,6 @@ else:
     if not datos_en_rango:
         st.warning("No hay registros en el rango seleccionado.")
     else:
-        # Procesamiento y agrupación de datos filtrados
         datos_filtrados = {}
         for d in datos_en_rango:
             f = d["fecha"]
@@ -149,12 +165,14 @@ else:
         ultimo_valor = valores_graf[-1]
         ultima_fecha = fechas_graf[-1]
 
-        # Estadísticas del periodo seleccionado
+        # Fechas de inicio y fin exactas del período filtrado
+        fecha_inicio_periodo = datos_en_rango[0]["fecha"].strftime("%d de %B de %Y")
+        fecha_fin_periodo = datos_en_rango[-1]["fecha"].strftime("%d de %B de %Y")
+
         promedio_periodo = sum(valores_graf) / len(valores_graf)
         max_periodo = max(valores_graf)
         min_periodo = min(valores_graf)
 
-        # Sistema de Alertas
         if activar_alerta and ultimo_valor > limite_alerta:
             st.error(
                 f"🚨 **¡ALERTA FINANCIERA!** La TMR actual en el rango es de **${ultimo_valor:,.2f} COP** "
@@ -165,7 +183,6 @@ else:
                 f"✅ **Estado Normal:** TMR actual en ${ultimo_valor:,.2f} COP al {ultima_fecha}."
             )
 
-        # Cálculo de Crecimiento para el rango seleccionado
         primer_valor = valores_graf[0]
         cambio_absoluto = ultimo_valor - primer_valor
         cambio_porcentual = (cambio_absoluto / primer_valor) * 100 if primer_valor > 0 else 0.0
@@ -191,6 +208,9 @@ else:
         )
 
         st.subheader(f"📈 Tendencia Histórica ({segmentacion})")
+        
+        # Subtítulo con las fechas de inicio y fin del rango analizado
+        st.markdown(f"🗓️ **Intervalo analizado:** Del {datos_en_rango[0]['fecha'].strftime('%Y-%m-%d')} al {datos_en_rango[-1]['fecha'].strftime('%Y-%m-%d')}")
 
         chart_data = {
             "Periodo": fechas_graf,
