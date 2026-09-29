@@ -37,10 +37,10 @@ datos = cargar_datos_tmr()
 if not datos:
     st.warning("No se pudieron cargar los datos en este momento. Intenta recargar la página.")
 else:
-    # Definir límites globales basados en los datos
+    # Definir límites globales
     fecha_min_global = datos[0]["fecha"].date()
     fecha_max_global = datos[-1]["fecha"].date()
-    tmr_hoy = datos[-1]["valor"] # Último valor real del dataset global (Hoy)
+    tmr_hoy = datos[-1]["valor"]  # Último valor real del dataset global (Hoy)
 
     # Cabecera principal con TMR de Hoy destacada al lado del título
     col_title, col_badge = st.columns([3, 1])
@@ -53,43 +53,66 @@ else:
         "Datos oficiales obtenidos en tiempo real desde el portal de datos abiertos de Colombia (`datos.gov.co`)."
     )
 
-    # Inicializar Session State para el botón de restablecer filtros
-    if "rango_anios" not in st.session_state:
-        st.session_state.rango_anios = (fecha_min_global.year, fecha_max_global.year)
-    if "segmentacion" not in st.session_state:
-        st.session_state.segmentacion = "Mensual"
-    if "limite_alerta" not in st.session_state:
-        st.session_state.limite_alerta = 4500.0
-
-    def reset_filtros():
-        st.session_state.rango_anios = (fecha_min_global.year, fecha_max_global.year)
-        st.session_state.segmentacion = "Mensual"
-        st.session_state.limite_alerta = 4500.0
-
-    # Sidebar: Panel de Control, Segmentación y Filtros con Slider
+    # Sidebar: Panel de Control con nueva jerarquía
     st.sidebar.header("⚙️ Panel de Control y Filtros")
 
     # Botón de Restablecer Filtros
-    st.sidebar.button("🔄 Restablecer Filtros", on_click=reset_filtros)
+    if st.sidebar.button("🔄 Restablecer Filtros"):
+        st.rerun()
 
-    # 1. Filtro de Rango de Años con Barra de Desplazamiento (Slider)
-    st.sidebar.subheader("📅 Rango de Años en el Eje X")
-    rango_anios = st.sidebar.slider(
-        "Selecciona el intervalo de años:",
-        min_value=fecha_min_global.year,
-        max_value=fecha_max_global.year,
-        value=st.session_state.rango_anios,
-        key="rango_anios"
-    )
-
-    # 2. Selector de segmentación
-    st.sidebar.subheader("📊 Agrupación")
+    # 1. Jerarquía Principal: Agrupación (Define la escala del eje X)
+    st.sidebar.subheader("📊 Agrupación Temporal")
     segmentacion = st.sidebar.selectbox(
         "Agrupar información por:",
-        ["Diario", "Semanal", "Mensual", "Anual"],
-        index=["Diario", "Semanal", "Mensual", "Anual"].index(st.session_state.segmentacion),
-        key="segmentacion"
+        ["Anual", "Mensual", "Semanal", "Diario"],
+        index=1  # Por defecto Mensual
     )
+
+    # 2. Filtro de Intervalo Dinámico según la Agrupación elegida
+    st.sidebar.subheader("📅 Rango del Eje X")
+    
+    if segmentacion == "Anual":
+        anos_disponibles = sorted(list(set(d["fecha"].strftime("%Y") for d in datos)))
+        rango_seleccionado = st.sidebar.select_slider(
+            "Selecciona el intervalo de años:",
+            options=anos_disponibles,
+            value=(anos_disponibles[0], anos_disponibles[-1])
+        )
+        ini, fin = rango_seleccionado
+        datos_en_rango = [d for d in datos if ini <= d["fecha"].strftime("%Y") <= fin]
+
+    elif segmentacion == "Mensual":
+        meses_disponibles = sorted(list(set(d["fecha"].strftime("%Y-%m") for d in datos)))
+        rango_seleccionado = st.sidebar.select_slider(
+            "Selecciona el intervalo de meses:",
+            options=meses_disponibles,
+            value=(meses_disponibles[0], meses_disponibles[-1])
+        )
+        ini, fin = rango_seleccionado
+        datos_en_rango = [d for d in datos if ini <= d["fecha"].strftime("%Y-%m") <= fin]
+
+    elif segmentacion == "Semanal":
+        semanas_disponibles = sorted(list(set(d["fecha"].strftime("%Y-W%V") for d in datos)))
+        rango_seleccionado = st.sidebar.select_slider(
+            "Selecciona el intervalo de semanas:",
+            options=semanas_disponibles,
+            value=(semanas_disponibles[0], semanas_disponibles[-1])
+        )
+        ini, fin = rango_seleccionado
+        datos_en_rango = [d for d in datos if ini <= d["fecha"].strftime("%Y-W%V") <= fin]
+
+    else:  # Diario
+        rango_fechas = st.sidebar.date_input(
+            "Selecciona el intervalo de días:",
+            value=(fecha_min_global, fecha_max_global),
+            min_value=fecha_min_global,
+            max_value=fecha_max_global
+        )
+        if len(rango_fechas) == 2:
+            f_inicio, f_fin = rango_fechas
+            datos_en_rango = [d for d in datos if f_inicio <= d["fecha"].date() <= f_fin]
+        else:
+            datos_en_rango = datos
 
     # 3. Configuración de Alertas
     st.sidebar.subheader("🚨 Configuración de Alertas")
@@ -98,19 +121,12 @@ else:
         "Notificar si la TMR supera (COP):",
         min_value=1000.0,
         max_value=10000.0,
-        step=50.0,
-        key="limite_alerta"
+        value=4500.0,
+        step=50.0
     )
 
-    # Filtrar datos según el rango de años seleccionado en el slider
-    anio_inicio, anio_fin = rango_anios
-    datos_en_rango = [
-        d for d in datos 
-        if anio_inicio <= d["fecha"].year <= anio_fin
-    ]
-
     if not datos_en_rango:
-        st.warning("No hay registros en el rango de años seleccionado.")
+        st.warning("No hay registros en el rango seleccionado.")
     else:
         # Procesamiento y agrupación de datos filtrados
         datos_filtrados = {}
@@ -154,7 +170,7 @@ else:
         cambio_absoluto = ultimo_valor - primer_valor
         cambio_porcentual = (cambio_absoluto / primer_valor) * 100 if primer_valor > 0 else 0.0
 
-        # Métricas Superiores Organizadas (4 columnas principales del rango)
+        # Métricas Superiores
         col1, col2, col3, col4 = st.columns(4)
         col1.metric(
             label="TMR Final del Rango",
