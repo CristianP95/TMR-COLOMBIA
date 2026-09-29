@@ -18,7 +18,7 @@ st.markdown(
 @st.cache_data(ttl=3600)
 def cargar_datos_tmr():
   # Consultar la API ordenada por fecha ascendente
-  url = "https://www.datos.gov.co/resource/mcec-87by.json?$order=vigenciadesde ASC&$limit=50000"
+  url = "https://www.datos.gov.co/resource/mcec-87by.json?$order=vigenciadesde ASC&$limit=10000"
   try:
     with urllib.request.urlopen(url) as response:
       data = json.loads(response.read().decode())
