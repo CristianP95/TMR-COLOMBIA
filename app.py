@@ -58,6 +58,36 @@ else:
     fecha_hoy_obj = datos[-1]["fecha"]
     fecha_hoy_str = obtener_fecha_formateada(fecha_hoy_obj)
 
+    # Listas de opciones globales para los sliders
+    anos_disponibles = sorted(list(set(d["fecha"].strftime("%Y") for d in datos)))
+    meses_disponibles = sorted(list(set(d["fecha"].strftime("%Y-%m") for d in datos)))
+    semanas_disponibles = sorted(list(set(d["fecha"].strftime("%Y-W%V") for d in datos)))
+
+    # Inicialización de Session State para filtros por defecto
+    if "segmentacion" not in st.session_state:
+        st.session_state.segmentacion = "Mensual"
+    if "rango_anual" not in st.session_state:
+        st.session_state.rango_anual = (anos_disponibles[0], anos_disponibles[-1])
+    if "rango_mensual" not in st.session_state:
+        st.session_state.rango_mensual = (meses_disponibles[0], meses_disponibles[-1])
+    if "rango_semanal" not in st.session_state:
+        st.session_state.rango_semanal = (semanas_disponibles[0], semanas_disponibles[-1])
+    if "rango_diario" not in st.session_state:
+        st.session_state.rango_diario = (fecha_min_global, fecha_max_global)
+    if "activar_alerta" not in st.session_state:
+        st.session_state.activar_alerta = True
+    if "limite_alerta" not in st.session_state:
+        st.session_state.limite_alerta = 4500.0
+
+    def reset_filtros():
+        st.session_state.segmentacion = "Mensual"
+        st.session_state.rango_anual = (anos_disponibles[0], anos_disponibles[-1])
+        st.session_state.rango_mensual = (meses_disponibles[0], meses_disponibles[-1])
+        st.session_state.rango_semanal = (semanas_disponibles[0], semanas_disponibles[-1])
+        st.session_state.rango_diario = (fecha_min_global, fecha_max_global)
+        st.session_state.activar_alerta = True
+        st.session_state.limite_alerta = 4500.0
+
     # Cabecera principal con TMR de Hoy y su fecha detallada
     col_title, col_badge = st.columns([3, 1])
     with col_title:
@@ -74,47 +104,43 @@ else:
         "Datos oficiales obtenidos en tiempo real desde el portal de datos abiertos de Colombia (`datos.gov.co`)."
     )
 
-    # Sidebar: Panel de Control con jerarquía de filtros
+    # Sidebar: Panel de Control con jerarquía de filtros vinculada al estado
     st.sidebar.header("⚙️ Panel de Control y Filtros")
 
-    if st.sidebar.button("🔄 Restablecer Filtros"):
-        st.rerun()
+    st.sidebar.button("🔄 Restablecer Filtros", on_click=reset_filtros)
 
     st.sidebar.subheader("📊 Agrupación Temporal")
     segmentacion = st.sidebar.selectbox(
         "Agrupar información por:",
         ["Anual", "Mensual", "Semanal", "Diario"],
-        index=1 
+        key="segmentacion"
     )
 
     st.sidebar.subheader("📅 Rango del Eje X")
     
     if segmentacion == "Anual":
-        anos_disponibles = sorted(list(set(d["fecha"].strftime("%Y") for d in datos)))
         rango_seleccionado = st.sidebar.select_slider(
             "Selecciona el intervalo de años:",
             options=anos_disponibles,
-            value=(anos_disponibles[0], anos_disponibles[-1])
+            key="rango_anual"
         )
         ini, fin = rango_seleccionado
         datos_en_rango = [d for d in datos if ini <= d["fecha"].strftime("%Y") <= fin]
 
     elif segmentacion == "Mensual":
-        meses_disponibles = sorted(list(set(d["fecha"].strftime("%Y-%m") for d in datos)))
         rango_seleccionado = st.sidebar.select_slider(
             "Selecciona el intervalo de meses:",
             options=meses_disponibles,
-            value=(meses_disponibles[0], meses_disponibles[-1])
+            key="rango_mensual"
         )
         ini, fin = rango_seleccionado
         datos_en_rango = [d for d in datos if ini <= d["fecha"].strftime("%Y-%m") <= fin]
 
     elif segmentacion == "Semanal":
-        semanas_disponibles = sorted(list(set(d["fecha"].strftime("%Y-W%V") for d in datos)))
         rango_seleccionado = st.sidebar.select_slider(
             "Selecciona el intervalo de semanas:",
             options=semanas_disponibles,
-            value=(semanas_disponibles[0], semanas_disponibles[-1])
+            key="rango_semanal"
         )
         ini, fin = rango_seleccionado
         datos_en_rango = [d for d in datos if ini <= d["fecha"].strftime("%Y-W%V") <= fin]
@@ -122,24 +148,24 @@ else:
     else:  # Diario
         rango_fechas = st.sidebar.date_input(
             "Selecciona el intervalo de días:",
-            value=(fecha_min_global, fecha_max_global),
             min_value=fecha_min_global,
-            max_value=fecha_max_global
+            max_value=fecha_max_global,
+            key="rango_diario"
         )
-        if len(rango_fechas) == 2:
+        if isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
             f_inicio, f_fin = rango_fechas
             datos_en_rango = [d for d in datos if f_inicio <= d["fecha"].date() <= f_fin]
         else:
             datos_en_rango = datos
 
     st.sidebar.subheader("🚨 Configuración de Alertas")
-    activar_alerta = st.sidebar.checkbox("Activar alerta por umbral de TMR", value=True)
+    activar_alerta = st.sidebar.checkbox("Activar alerta por umbral de TMR", key="activar_alerta")
     limite_alerta = st.sidebar.number_input(
         "Notificar si la TMR supera (COP):",
         min_value=1000.0,
         max_value=10000.0,
-        value=4500.0,
-        step=50.0
+        step=50.0,
+        key="limite_alerta"
     )
 
     if not datos_en_rango:
@@ -164,10 +190,6 @@ else:
 
         ultimo_valor = valores_graf[-1]
         ultima_fecha = fechas_graf[-1]
-
-        # Fechas de inicio y fin exactas del período filtrado
-        fecha_inicio_periodo = datos_en_rango[0]["fecha"].strftime("%d de %B de %Y")
-        fecha_fin_periodo = datos_en_rango[-1]["fecha"].strftime("%d de %B de %Y")
 
         promedio_periodo = sum(valores_graf) / len(valores_graf)
         max_periodo = max(valores_graf)
