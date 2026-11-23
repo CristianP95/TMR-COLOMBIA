@@ -5,6 +5,11 @@ ANALIZADOR HISTÓRICO Y MONITOREO EN TIEMPO REAL DE LA TMR (COLOMBIA)
 
 Aplicación web interactiva desarrollada en Python y desplegada en la nube para el análisis, consulta y monitoreo histórico de la Tasa Representativa del Mercado (TMR) de Colombia. Los datos se consumen dinámicamente en tiempo real desde el portal oficial de datos abiertos del gobierno (datos.gov.co), abarcando registros desde 1991 hasta la actualidad.
 
+VISUALIZAR LOS DATOS
+
+Visualice los datos en Streamlit, si la App esta caída. De Click en poner en marcha esta aplicación.
+https://graficador-tmr-banrep.streamlit.app/
+
 CARACTERÍSTICAS PRINCIPALES
 
 Consumo de API REST en Tiempo Real: Extracción automatizada de más de 30 años de registros financieros oficiales de la TMR mediante solicitudes HTTP eficientes y codificación de URLs seguras.
